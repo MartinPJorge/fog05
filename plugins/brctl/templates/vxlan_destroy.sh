@@ -5,6 +5,7 @@ if [ -f {{ dnsmasq_pid_file }} ]; then
    sudo rm {{ dnsmasq_pid_file }}
 fi
 
-sudo ip link del {{ vxlan_intf_name }}
 sudo ip link del {{ bridge }}
+sudo ip link del {{ vxlan_intf_name }}
+
 

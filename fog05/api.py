@@ -63,9 +63,10 @@ class API(object):
         self.image = self.Image(self.store)
         self.flavor = self.Flavor(self.store)
         self.onboard = self.add
-        self.offload =  self.remove
+        self.offload = self.remove
 
     def add(self, manifest):
+        manifest.update({'status': 'define'})
         nodes = self.node.list()
 
         for n in nodes:
@@ -75,32 +76,46 @@ class API(object):
             self.store.desired.put(uri, value)
 
         instances_uuids = {}
-        manifest.update({'status': 'define'})
+        networks_uuid = []
+
         try:
             validate(manifest, Schemas.entity_schema)
         except ValidationError as ve:
             print(ve.message)
             exit(-1)
         nws = manifest.get('networks')
+        print('networks: {}'.format(nws))
         for n in nws:
             for node in nodes:
-                self.network.add(manifest=n, node_uuid=node[0])
+                res = self.network.add(manifest=n, node_uuid=node[0])
+                if not res:
+                    raise Exception('Error on define network {} -> {} on {}  (RES={})'.format(n.get('uuid'), manifest.get('uuid'), node[0],res))
+            networks_uuid.append(n.get('uuid'))
         c_list = self.resolve_dependencies(manifest.get('components'))
         for c in c_list:
             search = [x for x in manifest.get("components") if x.get('name') == c]
             if len(search) > 0:
                 component = search[0]
+                print('Onboarding: {}'.format(component))
                 mf = component.get('manifest')
-                if not self.entity.define(manifest=mf, node_uuid=component.get('node'), wait=True):
-                    raise Exception('Error on define entity {} -> {} on {}'.format(manifest.get('uuid'),mf.get('uuid'),component.get('node')))
+                res = self.entity.define(manifest=mf, node_uuid=component.get('node'), wait=True)
+                # print(res)
+                if not res:
+                    raise Exception('Error on define entity {} -> {} on {}   (RES={})'.format(manifest.get('uuid'), mf.get('uuid'), component.get('node'), res))
+                time.sleep(0.5)
                 c_i_uuid = '{}'.format(uuid.uuid4())
-                if not self.entity.configure(mf.get('uuid'), component.get('node'), instance_uuid=c_i_uuid, wait=True):
-                    raise Exception('Error on define entity {} -> {} on {}'.format(manifest.get('uuid'), mf.get('uuid'), component.get('node')))
-                if not self.entity.run(mf.get('uuid'), component.get('node'), instance_uuid=c_i_uuid, wait=True):
-                    raise Exception('Error on define entity {} -> {} on {}'.format(manifest.get('uuid'), mf.get('uuid'), component.get('node')))
+                res = self.entity.configure(mf.get('uuid'), component.get('node'), instance_uuid=c_i_uuid, wait=True)
+                # print(res)
+                if not res:
+                    raise Exception('Error on define entity {} -> {} on {}   (RES={})'.format(manifest.get('uuid'), mf.get('uuid'), component.get('node'), res))
+                res = self.entity.run(mf.get('uuid'), component.get('node'), instance_uuid=c_i_uuid, wait=True)
+                # print(res)
+                time.sleep(0.5)
+                if not res:
+                    raise Exception('Error on define entity {} -> {} on {}   (RES={})'.format(manifest.get('uuid'), mf.get('uuid'), component.get('node'), res))
                 instances_uuids.update({mf.get('uuid'): c_i_uuid})
 
-        return {manifest.get('uuid'): instances_uuids}
+        return {'entity': {manifest.get('uuid'): instances_uuids}, 'networks': networks_uuid }
 
     def remove(self, entity_uuid):
         nodes = self.node.list()
@@ -387,6 +402,14 @@ class API(object):
                 raise RuntimeError('store cannot be none in API!')
             self.store = store
 
+        def __get_all_node_plugin(self, node_uuid):
+            uri = '{}/{}/plugins'.format(self.store.aroot, node_uuid)
+            response = self.store.actual.resolve(uri)
+            if response is not None and response != '':
+                return json.loads(response).get('plugins')
+            else:
+                return None
+
         def add(self, manifest, node_uuid=None):
             '''
 
@@ -398,17 +421,25 @@ class API(object):
             :return: boolean
             '''
 
-
             manifest.update({'status': 'add'})
             json_data = json.dumps(manifest)
 
             if node_uuid is not None:
-                uri = '{}/{}/network/*/networks/{}'.format(self.store.droot, node_uuid, manifest.get('uuid'))
+                all_plugins = self.__get_all_node_plugin(node_uuid)
+                if all_plugins is None:
+                    print('Error on receive plugin from node')
+                    return False
+                nws = [x for x in all_plugins if x.get('type') == 'network']
+                if len(nws) == 0:
+                    print('No network plugin loaded on node, aborting')
+                    return False
+                brctl = nws[0].get('uuid')  # will use the first plugin
+                uri = '{}/{}/network/{}/networks/{}'.format(self.store.droot, node_uuid, brctl, manifest.get('uuid'))
             else:
                 uri = '{}/*/network/*/networks/{}'.format(self.store.droot, manifest.get('uuid'))
 
             res = self.store.desired.put(uri, json_data)
-            if res:
+            if res >= 0:
                 return True
             else:
                 return False
@@ -424,7 +455,16 @@ class API(object):
             '''
 
             if node_uuid is not None:
-                uri = '{}/{}/network/*/networks/{}'.format(self.store.droot, node_uuid, net_uuid)
+                all_plugins = yield from self.__get_all_node_plugin(node_uuid)
+                if all_plugins is None:
+                    print('Error on receive plugin from node')
+                    return False
+                nws = [x for x in all_plugins if x.get('type') == 'network']
+                if len(nws) == 0:
+                    print('No network plugin loaded on node, aborting')
+                    return False
+                brctl = nws[0]  # will use the first plugin
+                uri = '{}/{}/network/{}/networks/{}'.format(self.store.droot, node_uuid, brctl, net_uuid)
             else:
                 uri = '{}/*/network/*/networks/{}'.format(self.store.droot, net_uuid)
 
@@ -489,7 +529,7 @@ class API(object):
 
         def __search_plugin_by_name(self, name, node_uuid):
             uri = '{}/{}/plugins'.format(self.store.aroot, node_uuid)
-            all_plugins = self.store.actual.get(uri)
+            all_plugins = self.store.actual.resolve(uri)
             if all_plugins is None or all_plugins == '':
                 print('Cannot get plugin')
                 return None
@@ -577,11 +617,14 @@ class API(object):
                     print('type not recognized')
 
                 if handler is None:
+                    print('Handler not found!! (Is none)')
                     return False
             except ValidationError as ve:
+                print('Validation error: {}'.format(ve.message))
                 return False
 
             if handler.get('uuid') is None:
+                print('Handler not found!! (Cannot get handler uuid)')
                 return False
 
             entity_uuid = manifest.get('uuid')
@@ -590,6 +633,7 @@ class API(object):
             uri = '{}/{}/runtime/{}/entity/{}'.format(self.store.droot, node_uuid, handler.get('uuid'), entity_uuid)
 
             res = self.store.desired.put(uri, json_data)
+            # print('RES is {}'.format(res))
             if res >= 0:
                 if wait:
                     self.__wait_atomic_entity_state_change(node_uuid,handler.get('uuid'), entity_uuid, 'defined')
@@ -634,6 +678,7 @@ class API(object):
 
             uri = '{}/{}/runtime/{}/entity/{}/instance/{}#status=configure'.format(self.store.droot, node_uuid, handler, entity_uuid, instance_uuid)
             res = self.store.desired.dput(uri)
+            # print('RES is {}'.format(res))
             if res >= 0:
                 if wait:
                     self.__wait_atomic_entity_instance_state_change(node_uuid, handler, entity_uuid, instance_uuid, 'configured')
@@ -675,6 +720,7 @@ class API(object):
             handler = self.__get_entity_handler_by_uuid(node_uuid, entity_uuid)
             uri = '{}/{}/runtime/{}/entity/{}/instance/{}#status=run'.format(self.store.droot, node_uuid, handler, entity_uuid, instance_uuid)
             res = self.store.desired.dput(uri)
+            # print('RES is {}'.format(res))
             if res >= 0:
                 if wait:
                     self.__wait_atomic_entity_instance_state_change(node_uuid, handler, entity_uuid, instance_uuid, 'run')

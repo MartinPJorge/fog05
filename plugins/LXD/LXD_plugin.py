@@ -108,18 +108,28 @@ class LXD(RuntimePlugin):
         else:
             return None
 
+        if entity.image_url.startswith('http'):
+            image_name = os.path.join(self.BASE_DIR, self.IMAGE_DIR, entity.image_url.split('/')[-1])
+            self.agent.get_os_plugin().download_file(entity.image_url, image_name)
+        elif entity.image_url.startswith('file://'):
+            image_name = os.path.join(self.BASE_DIR, self.IMAGE_DIR, entity.image_url.split('/')[-1])
+            cmd = 'cp {} {}'.format(entity.image_url[len('file://'):], image_name)
+            self.agent.get_os_plugin().execute_command(cmd, True)
 
-        image_name = os.path.join(self.BASE_DIR, self.IMAGE_DIR, entity.image_url.split('/')[-1])
-        self.agent.get_os_plugin().download_file(entity.image_url, image_name)
+
         entity.image = image_name
         entity.set_state(State.DEFINED)
 
         # TODO check what can go here and what should be in instance configuration
         # i think image should be here and profile generation in instance configuration
+        self.agent.logger.info('defineEntity()', '[ INFO ] LXD Plugin - Loading image data from: {}'.format(os.path.join(self.BASE_DIR, self.IMAGE_DIR, entity.image)))
         image_data = self.agent.get_os_plugin().read_binary_file(os.path.join(self.BASE_DIR, self.IMAGE_DIR, entity.image))
+        self.agent.logger.info('defineEntity()', '[ DONE ] LXD Plugin - Loading image data from: {}'.format(os.path.join(self.BASE_DIR, self.IMAGE_DIR, entity.image)))
         try:
+            self.agent.logger.info('defineEntity()', '[ INFO ] LXD Plugin - Creating image with alias {}'.format(entity_uuid))
             img = self.conn.images.create(image_data, public=True, wait=True)
             img.add_alias(entity_uuid, description=entity.name)
+            self.agent.logger.info('defineEntity()', '[ DONE ] LXD Plugin - Created image with alias {}'.format(entity_uuid))
 
             '''
             Should explore how to setup correctly the networking, seems that you can't decide the interface you 
@@ -228,7 +238,8 @@ class LXD(RuntimePlugin):
 
                 #self.agent.getOSPlugin().executeCommand(wget_cmd, True)
 
-                image_data = self.agent.get_os_plugin().read_binary_file(os.path.join(self.BASE_DIR, self.IMAGE_DIR, entity.image))
+                #image_data = self.agent.get_os_plugin().read_binary_file(os.path.join(self.BASE_DIR, self.IMAGE_DIR, entity.image))
+                self.agent.logger.info('configureEntity()', '[ INFO ] LXD Plugin - Creating profile...')
                 try:
                     #img = self.conn.images.create(image_data, public=True, wait=True)
                     #img.add_alias(entity_uuid, description=entity.name)
@@ -256,15 +267,19 @@ class LXD(RuntimePlugin):
                 except LXDAPIException as e:
                     self.agent.logger.error('configureEntity()', 'Error {0}'.format(e))
                     pass
-
+                self.agent.logger.info('configureEntity()', '[ DONE ] LXD Plugin - Creating profile...')
                 if instance.profiles is None:
                     instance.profiles = list()
 
                 instance.profiles.append(instance_uuid)
 
+                self.agent.logger.info('configureEntity()', '[ INFO ] LXD Plugin - Generating container configuration...')
                 config = self.__generate_container_dict(instance)
+                self.agent.logger.info('configureEntity()', '[ DONE ] LXD Plugin - Generating container configuration...')
 
+                self.agent.logger.info('configureEntity()', '[ INFO ] LXD Plugin - Creating Container...')
                 self.conn.containers.create(config, wait=True)
+                self.agent.logger.info('configureEntity()', '[ DONE ] LXD Plugin - Creating Container...')
 
                 instance.on_configured(config)
                 entity.add_instance(instance)
@@ -317,6 +332,11 @@ class LXD(RuntimePlugin):
 
                     time.sleep(2)
                     profile = self.conn.profiles.get(instance_uuid)
+
+                    while True:
+                        if len(profile.used_by) == 0:
+                            break
+                        time.sleep(1)
                     profile.delete()
 
                     '''
@@ -688,6 +708,7 @@ class LXD(RuntimePlugin):
         '''
         devices = {}
         template_value_bridge = '{"name":"%s","type":"nic","parent":"%s","nictype":"bridged"}'
+        template_value_bridge_mac = '{"name":"%s","type":"nic","parent":"%s","nictype":"bridged","hwaddr":"%s"}'
         template_value_phy = '{"name":"%s","type":"nic","parent":"%s","nictype":"physical"}'
         template_value_macvlan = '{"name":"%s","type":"nic","parent":"%s","nictype":"macvlan"}'
 
@@ -716,7 +737,10 @@ class LXD(RuntimePlugin):
                     n.update({'intf_name': "eth"+str(i)})
                 #nw_k = str(template_key % n.get('intf_name'))
                 nw_k = str(template_key2 % i)
-                nw_v = json.loads(str(template_value_bridge % (n.get('intf_name'), n.get('br_name'))))
+                if n.get('mac') is not None:
+                    nw_v = json.loads(str(template_value_bridge_mac % (n.get('intf_name'), n.get('br_name'), n.get('mac'))))
+                else:
+                    nw_v = json.loads(str(template_value_bridge % (n.get('intf_name'), n.get('br_name'))))
 
             elif self.agent.get_os_plugin().get_intf_type(n.get('br_name')) in ['ethernet']:
                 #if n.get('')
