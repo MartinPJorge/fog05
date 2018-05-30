@@ -110,7 +110,7 @@ class API(object):
                     raise Exception('Error on define entity {} -> {} on {}   (RES={})'.format(manifest.get('uuid'), mf.get('uuid'), component.get('node'), res))
                 res = self.entity.run(mf.get('uuid'), component.get('node'), instance_uuid=c_i_uuid, wait=True)
                 # print(res)
-                time.sleep(0.5)
+                time.sleep(2)
                 if not res:
                     raise Exception('Error on define entity {} -> {} on {}   (RES={})'.format(manifest.get('uuid'), mf.get('uuid'), component.get('node'), res))
                 instances_uuids.update({mf.get('uuid'): c_i_uuid})
