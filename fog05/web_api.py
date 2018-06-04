@@ -1,6 +1,5 @@
 from jsonschema import validate, ValidationError
 from fog05 import Schemas
-from dstore import Store
 from enum import Enum
 import re
 import uuid
@@ -9,92 +8,7 @@ import fnmatch
 import time
 import urllib3
 import requests
-
-
-class RESTStore(object):
-    def __init__(self, root, host, port):
-        self.root = root
-        self.host = host
-        self.port = port
-
-
-    def get(self, uri):
-        endpoint = "http://{}:{}/get/{}".format(self.host, self.port, uri)
-        resp = requests.get(endpoint)
-        return json.loads(resp.text)
-
-    def resolve(self, uri):
-        return self.get(uri)
-
-    def put(self, uri, value):
-        endpoint = "http://{}:{}/put/{}".format(self.host, self.port, uri)
-        resp = requests.put(endpoint, data={'value': value})
-        return json.loads(resp.text)
-
-    def dput(self, uri, value=None):
-        if value is None:
-            value = self.args2dict(uri.split('#')[-1])
-        endpoint = "http://{}:{}/dput/{}".format(self.host, self.port, uri)
-        resp = requests.patch(endpoint, data={'value': value})
-        return json.loads(resp.text)
-
-    def getAll(self, uri):
-        return self.get(uri)
-
-    def resolveAll(self, uri):
-        return self.get(uri)
-
-    def remove(self, uri):
-        endpoint = "http://{}:{}/remove/{}".format(self.host, self.port, uri)
-        resp = requests.delete(endpoint)
-        return json.loads(resp.text)
-
-    def dot2dict(self, dot_notation, value=None):
-        ld = []
-
-        tokens = dot_notation.split('.')
-        n_tokens = len(tokens)
-        for i in range(n_tokens, 0, -1):
-            if i == n_tokens and value is not None:
-                ld.append({tokens[i - 1]: value})
-            else:
-                ld.append({tokens[i - 1]: ld[-1]})
-
-        return ld[-1]
-
-    def args2dict(self, values):
-        data = {}
-        uri_values = values.split('&')
-        for tokens in uri_values:
-            v = tokens.split('=')[-1]
-            k = tokens.split('=')[0]
-            if len(k.split('.')) < 2:
-                data.update({k: v})
-            else:
-                d = self.dot2dict(k, v)
-                data.update(d)
-        return data
-
-
-class FOSRESTStore(object):
-
-    "Helper class to interact with the Store"
-
-    def __init__(self, host, port, aroot, droot):
-        self.aroot = aroot
-        self.droot = droot
-        self.actual = RESTStore(aroot, host, port)
-        self.desired = RESTStore(droot, host, port)
-
-
-
-    def close(self):
-        '''
-        Close the store
-
-        :return: None
-        '''
-        return None
+from fog05 import API
 
 
 
@@ -106,67 +20,28 @@ class WebAPI(object):
 
     def __init__(self, host, port, sysid=0, store_id="python-api-rest"):
 
-        self.a_root = 'afos://{}'.format(sysid)
-        self.d_root = 'dfos://{}'.format(sysid)
-        self.store = FOSRESTStore(host, port, self.a_root, self.d_root)
+       self.api = API(store_id='fog05.rest')
 
-        self.manifest = self.Manifest(self.store)
-        self.node = self.Node(self.store)
-        self.plugin = self.Plugin(self.store)
-        self.network = self.Network(self.store)
-        self.entity = self.Entity(self.store)
-        self.image = self.Image(self.store)
-        self.flavor = self.Flavor(self.store)
+        self.manifest = self.Manifest(self.api)
+        self.node = self.Node(self.api)
+        self.plugin = self.Plugin(self.api)
+        self.network = self.Network(self.api)
+        self.entity = self.Entity(self.api)
+        self.image = self.Image(self.api)
+        self.flavor = self.Flavor(self.api)
 
     class Manifest(object):
         '''
         This class encapsulates API for manifests
 
         '''
-        def __init__(self, store=None):
-            if store is None:
-                raise RuntimeError('store cannot be none in API!')
-            self.store = store
+        def __init__(self, api=None):
+            if api is None:
+                raise RuntimeError('api cannot be none in API!')
+            self.api = api
 
         def check(self, manifest, manifest_type):
-            '''
-
-            This method allow you to check if a manifest is write in the correct way
-
-
-            :param manifest: a dictionary rapresenting the JSON manifest
-            :param manifest_type: the manifest type from API.Manifest.Type
-            :return: boolean
-            '''
-            if manifest_type == self.Type.ENTITY:
-                t = manifest.get('type')
-                try:
-                    if t == 'vm':
-                        validate(manifest.get('entity_data'), Schemas.vm_schema)
-                    elif t == 'container':
-                        validate(manifest.get('entity_data'), Schemas.container_schema)
-                    elif t == 'native':
-                        validate(manifest.get('entity_data'), Schemas.native_schema)
-                    elif t == 'ros2':
-                        validate(manifest.get('entity_data'), Schemas.ros2_schema)
-                    elif t == 'usvc':
-                        return False
-                    else:
-                        return False
-                except ValidationError as ve:
-                    return False
-            if manifest_type == self.Type.NETWORK:
-                try:
-                    validate(manifest, Schemas.network_schema)
-                except ValidationError as ve:
-                    return False
-            if manifest_type == self.Type.ENTITY:
-                try:
-                    validate(manifest, Schemas.entity_schema)
-                except ValidationError as ve:
-                    return False
-
-            return True
+           return self.api.manifest.check(manifest, manifest_type)
 
         class Type(Enum):
             '''
@@ -185,25 +60,13 @@ class WebAPI(object):
 
         '''
 
-        def __init__(self, store=None):
-            if store is None:
-                raise RuntimeError('store cannot be none in API!')
-            self.store = store
+        def __init__(self, api=None):
+            if api is None:
+                raise RuntimeError('api cannot be none in API!')
+            self.api = api
 
         def list(self):
-            '''
-            Get all nodes in the current system/tenant
-
-            :return: list of tuples (uuid, hostname)
-            '''
-            nodes = []
-            uri = '{}/*'.format(self.store.aroot)
-            infos = self.store.actual.resolveAll(uri)
-            for i in infos:
-                if len(i[0].split('/')) == 4:
-                    node_info = json.loads(i[1])
-                    nodes.append((node_info.get('uuid'), node_info.get('name')))
-            return nodes
+            return self.api.node.list()
 
         def info(self, node_uuid):
             """
@@ -212,13 +75,7 @@ class WebAPI(object):
             :param node_uuid: the uuid of the node you want info
             :return: a dictionary with all information about the node
             """
-            if node_uuid is None:
-                return None
-            uri = '{}/{}'.format(self.store.aroot, node_uuid)
-            infos = self.store.actual.resolve(uri)
-            if infos is None:
-                return None
-            return json.loads(infos)
+            return self.api.node.info(node_uuid)
 
         def plugins(self, node_uuid):
             '''
@@ -228,12 +85,7 @@ class WebAPI(object):
             :param node_uuid: the uuid of the node you want info
             :return: a list of the plugins installed in the node with detailed informations
             '''
-            uri = '{}/{}/plugins'.format(self.store.aroot, node_uuid)
-            response = self.store.actual.get(uri)
-            if response is not None:
-                return json.loads(response).get('plugins')
-            else:
-                return None
+            self.api.node.plugins(node_uuid)
 
         def search(self, search_dict):
             '''
@@ -250,10 +102,10 @@ class WebAPI(object):
         This class encapsulates the commands for Plugin interaction
 
         '''
-        def __init__(self, store=None):
-            if store is None:
-                raise RuntimeError('store cannot be none in API!')
-            self.store = store
+        def __init__(self, api=None):
+            if api is None:
+                raise RuntimeError('api cannot be none in API!')
+            self.api = api
 
         def add(self, manifest, node_uuid=None):
             '''
@@ -264,21 +116,11 @@ class WebAPI(object):
             :param node_uuid: optional the node in which add the plugin
             :return: boolean
             '''
-
-
-            manifest.update({'status':'add'})
-            plugins = {"plugins": [manifest]}
-            plugins = json.dumps(plugins).replace(' ', '')
             if node_uuid is None:
-                uri = '{}/*/plugins'.format(self.store.droot)
+                return self.api.plugin.add(manifest)
             else:
-                uri = '{}/{}/plugins'.format(self.store.droot, node_uuid)
+                return self.api.plugin.add(manifest,node_uuid)
 
-            res = self.store.desired.dput(uri, plugins)
-            if res:
-                return True
-            else:
-                return False
 
         def remove(self, plugin_uuid, node_uuid=None):
             '''
@@ -300,22 +142,10 @@ class WebAPI(object):
             :return: dictionary {node_uuid, plugin list }
             '''
             if node_uuid is not None:
+                return self.api.plugin.list(node_uuid)
+            return self.api.plugin.list()
 
-                uri = '{}/{}/plugins'.format(self.store.aroot, node_uuid)
-                response = self.store.actual.get(uri)
-                if response is not None:
-                    return {node_uuid:json.loads(response).get('plugins')}
-                else:
-                    return None
 
-            plugins = {}
-            uri = '{}/*/plugins'.format(self.store.aroot)
-            response = self.store.actual.resolveAll(uri)
-            for i in response:
-                id = i[0].split('/')[2]
-                pl = json.loads(i[1]).get('plugins')
-                plugins.update({id: pl})
-            return plugins
 
         def search(self, search_dict, node_uuid=None):
             '''
@@ -335,10 +165,10 @@ class WebAPI(object):
 
         '''
 
-        def __init__(self, store=None):
-            if store is None:
-                raise RuntimeError('store cannot be none in API!')
-            self.store = store
+        def __init__(self, api=None):
+            if api is None:
+                raise RuntimeError('api cannot be none in API!')
+            self.api = api
 
         def add(self, manifest, node_uuid=None):
             '''
@@ -351,20 +181,10 @@ class WebAPI(object):
             :return: boolean
             '''
 
-
-            manifest.update({'status': 'add'})
-            json_data = json.dumps(manifest).replace(' ', '')
-
             if node_uuid is not None:
-                uri = '{}/{}/network/*/networks/{}'.format(self.store.droot, node_uuid, manifest.get('uuid'))
-            else:
-                uri = '{}/*/network/*/networks/{}'.format(self.store.droot, manifest.get('uuid'))
+                return self.api.network.add(manifest, node_uuid)
+            return self.api.network.add(manifest)
 
-            res = self.store.desired.put(uri, json_data)
-            if res:
-                return True
-            else:
-                return False
 
         def remove(self, net_uuid, node_uuid=None):
             '''
@@ -377,15 +197,9 @@ class WebAPI(object):
             '''
 
             if node_uuid is not None:
-                uri = '{}/{}/network/*/networks/{}'.format(self.store.droot, node_uuid, net_uuid)
-            else:
-                uri = '{}/*/network/*/networks/{}'.format(self.store.droot, net_uuid)
+               return self.api.network.remove(net_uuid,node_uuid)
+            return self.api.network.remove(net_uuid)
 
-            res = self.store.desired.remove(uri)
-            if res:
-                return True
-            else:
-                return False
 
         def list(self, node_uuid=None):
             '''
@@ -397,25 +211,8 @@ class WebAPI(object):
             '''
 
             if node_uuid is not None:
-                n_list = []
-                uri = '{}/{}/network/*/networks/'.format(self.store.aroot, node_uuid)
-                response = self.store.actual.resolveAll(uri)
-                for i in response:
-                    n_list.append(json.loads(i[1]))
-                return {node_uuid: n_list}
-
-            nets = {}
-            uri = '{}/*/network/*/networks/'.format(self.store.aroot)
-            response = self.store.actual.resolveAll(uri)
-            for i in response:
-                id = i[0].split('/')[2]
-                net = json.loads(i[1])
-                net_list = nets.get(id, None)
-                if net_list is None:
-                    net_list = []
-                net_list.append(net)
-                nets.update({id: net_list})
-            return nets
+               return self.api.network.list(node_uuid)
+            return self.api.network.list(node_uuid)
 
         def search(self, search_dict, node_uuid=None):
             '''
@@ -435,91 +232,10 @@ class WebAPI(object):
 
         '''
 
-        def __init__(self, store=None):
-            if store is None:
-                raise RuntimeError('store cannot be none in API!')
-            self.store = store
-
-        def __search_plugin_by_name(self, name, node_uuid):
-            uri = '{}/{}/plugins'.format(self.store.aroot, node_uuid)
-            all_plugins = self.store.actual.get(uri)
-            if all_plugins is None or all_plugins == '':
-                print('Cannot get plugin')
-                return None
-            all_plugins = json.loads(all_plugins).get('plugins')
-            search = [x for x in all_plugins if name.upper() in x.get('name').upper()]
-            if len(search) == 0:
-                return None
-            else:
-                print("handler {}".format(search))
-                return search[0]
-
-        def __get_entity_handler_by_uuid(self, node_uuid, entity_uuid):
-            uri = '{}/{}/runtime/*/entity/{}'.format(self.store.aroot, node_uuid, entity_uuid)
-            all = self.store.actual.resolveAll(uri)
-            for i in all:
-                k = i[0]
-                if fnmatch.fnmatch(k, uri):
-                    # print('MATCH {0}'.format(k))
-                    # print('Extracting uuid...')
-                    regex = uri.replace('/', '\/')
-                    regex = regex.replace('*', '(.*)')
-                    reobj = re.compile(regex)
-                    mobj = reobj.match(k)
-                    uuid = mobj.group(1)
-                    # print('UUID {0}'.format(uuid))
-                    print("handler {}".format(uuid))
-                    return uuid
-
-        def __get_entity_handler_by_type(self, node_uuid, t):
-            handler = None
-            handler = self.__search_plugin_by_name(t, node_uuid)
-            if handler is None:
-                print('type not yet supported')
-            print("handler {}".format(handler))
-            return handler
-
-        def __wait_atomic_entity_state_change(self, node_uuid, handler_uuid, entity_uuid, state):
-            while True:
-                time.sleep(1)
-                uri = '{}/{}/runtime/{}/entity/{}'.format(self.store.aroot, node_uuid, handler_uuid, entity_uuid)
-                data = self.store.actual.get(uri)
-                if data is not None:
-                    entity_info = json.loads(data)
-                    if entity_info is not None and entity_info.get('status') == state:
-                        return
-
-        def __wait_atomic_entity_instance_state_change(self, node_uuid, handler_uuid, entity_uuid, instance_uuid, state):
-            while True:
-                time.sleep(1)
-                uri = '{}/{}/runtime/{}/entity/{}/instance/{}'.format(self.store.aroot, node_uuid, handler_uuid, entity_uuid, instance_uuid)
-                data = self.store.actual.get(uri)
-                if data is not None:
-                    entity_info = json.loads(data)
-                    if entity_info is not None and entity_info.get('status') == state:
-                        return
-
-        def add(self, manifest, node_uuid=None, wait=False):
-            '''
-            define, configure and run an entity all in one shot
-            :param manifest: manifest rapresenting the entity
-            :param node_uuid: optional uuid of the node in which the entity will be added
-            :param wait: flag for wait that everything is started before returing
-            :return: the instance uuid
-            '''
-            pass
-
-        def remove(self, entity_uuid, node_uuid=None, wait=False):
-            '''
-
-            stop, clean and undefine entity all in one shot
-
-            :param entity_uuid:
-            :param node_uuid:
-            :param wait:
-            :return: the instance uuid
-            '''
-            pass
+        def __init__(self, api=None):
+            if api is None:
+                raise RuntimeError('api cannot be none in API!')
+            self.api = api
 
         def define(self, manifest, node_uuid, wait=False):
             '''
@@ -531,45 +247,8 @@ class WebAPI(object):
             :param wait: if wait that the definition is complete before returning
             :return: boolean
             '''
+            return self.api.entity.define(manifest,node_uuid, wait)
 
-            manifest.update({'status': 'define'})
-            handler = None
-            t = manifest.get('type')
-            try:
-                if t in ['kvm', 'xen']:
-                    handler = self.__search_plugin_by_name(t, node_uuid)
-                    validate(manifest.get('entity_data'), Schemas.vm_schema)
-                elif t in ['container', 'lxd']:
-                    handler = self.__search_plugin_by_name(t, node_uuid)
-                    validate(manifest.get('entity_data'), Schemas.container_schema)
-                elif t == 'native':
-                    handler = self.__search_plugin_by_name('native', node_uuid)
-                    validate(manifest.get('entity_data'), Schemas.native_schema)
-                elif t == 'ros2':
-                    handler = self.__search_plugin_by_name('ros2', node_uuid)
-                    validate(manifest.get('entity_data'), Schemas.ros2_schema)
-                elif t == 'usvc':
-                    print('microservice not yet')
-                else:
-                    print('type not recognized')
-                if handler is None:
-                    return False
-            except ValidationError as ve:
-                print("Error in manifest {}".format(ve))
-                return False
-
-            entity_uuid = manifest.get('uuid')
-            entity_definition = manifest
-            json_data = json.dumps(entity_definition).replace(' ', '')
-            uri = '{}/{}/runtime/{}/entity/{}'.format(self.store.droot, node_uuid, handler.get('uuid'), entity_uuid)
-
-            res = self.store.desired.put(uri, json_data)
-            if res:
-                if wait:
-                    self.__wait_atomic_entity_state_change(node_uuid,handler.get('uuid'), entity_uuid, 'defined')
-                return True
-            else:
-                return False
 
         def undefine(self, entity_uuid, node_uuid, wait=False):
             '''
@@ -581,14 +260,7 @@ class WebAPI(object):
             :param wait: if wait before returning that the entity is undefined
             :return: boolean
             '''
-            handler = self.__get_entity_handler_by_uuid(node_uuid, entity_uuid)
-            uri = '{}/{}/runtime/{}/entity/{}'.format(self.store.droot, node_uuid, handler, entity_uuid)
-
-            res = self.store.desired.remove(uri)
-            if res:
-                return True
-            else:
-                return False
+            return self.api.entity.undefine(entity_uuid, node_uuid, wait)
 
         def configure(self, entity_uuid, node_uuid, instance_uuid=None, wait=False):
             '''
@@ -601,18 +273,10 @@ class WebAPI(object):
             :param wait: optional wait before returning
             :return: intstance uuid or none in case of error
             '''
-            handler = self.__get_entity_handler_by_uuid(node_uuid, entity_uuid)
             if instance_uuid is None:
                 instance_uuid = '{}'.format(uuid.uuid4())
 
-            uri = '{}/{}/runtime/{}/entity/{}/instance/{}#status=configure'.format(self.store.droot, node_uuid, handler, entity_uuid, instance_uuid)
-            res = self.store.desired.dput(uri)
-            if res:
-                if wait:
-                    self.__wait_atomic_entity_instance_state_change(node_uuid, handler, entity_uuid, instance_uuid, 'configured')
-                return instance_uuid
-            else:
-                return None
+            return self.api.entity.configure(entity_uuid, node_uuid, instance_uuid, wait)
 
         def clean(self, entity_uuid, node_uuid, instance_uuid, wait=False):
             '''
@@ -625,13 +289,7 @@ class WebAPI(object):
             :param wait: optional wait before returning
             :return: boolean
             '''
-            handler = yield from self.__get_entity_handler_by_uuid(node_uuid, entity_uuid)
-            uri = '{}/{}/runtime/{}/entity/{}/instance/{}'.format(self.store.aroot, node_uuid, handler, entity_uuid, instance_uuid)
-            res = self.store.desired.remove(uri)
-            if res:
-                return True
-            else:
-                return False
+            return self.api.entity.clean(entity_uuid, node_uuid, instance_uuid, wait)
 
         def run(self, entity_uuid, node_uuid, instance_uuid, wait=False):
             '''
@@ -644,15 +302,7 @@ class WebAPI(object):
             :param wait: optional wait before returning
             :return: boolean
             '''
-            handler = self.__get_entity_handler_by_uuid(node_uuid, entity_uuid)
-            uri = '{}/{}/runtime/{}/entity/{}/instance/{}#status=run'.format(self.store.droot, node_uuid, handler, entity_uuid, instance_uuid)
-            res = self.store.desired.dput(uri)
-            if res:
-                if wait:
-                    self.__wait_atomic_entity_instance_state_change(node_uuid, handler, entity_uuid, instance_uuid, 'run')
-                return True
-            else:
-                return False
+            return self.api.entity.run(entity_uuid, node_uuid, instance_uuid, wait)
 
         def stop(self, entity_uuid, node_uuid, instance_uuid, wait=False):
             '''
@@ -666,15 +316,7 @@ class WebAPI(object):
             :return: boolean
             '''
 
-            handler = self.__get_entity_handler_by_uuid(node_uuid, entity_uuid)
-            uri = '{}/{}/runtime/{}/entity/{}/instance/{}#status=stop'.format(self.store.droot, node_uuid, handler, entity_uuid, instance_uuid)
-            res = self.store.desired.dput(uri)
-            if res:
-                if wait:
-                    self.__wait_atomic_entity_instance_state_change(node_uuid, handler, entity_uuid, instance_uuid, 'stop')
-                return True
-            else:
-                return False
+            return self.api.entity.stop(entity_uuid, node_uuid, instance_uuid, wait)
 
         def pause(self, entity_uuid, node_uuid, instance_uuid, wait=False):
             '''
@@ -687,15 +329,7 @@ class WebAPI(object):
             :param wait: optional wait before returning
             :return: boolean
             '''
-            handler = self.__get_entity_handler_by_uuid(node_uuid, entity_uuid)
-            uri = '{}/{}/runtime/{}/entity/{}/instance/{}#status=pause'.format(self.store.droot, node_uuid, handler, entity_uuid, instance_uuid)
-            res = self.store.desired.dput(uri)
-            if res:
-                if wait:
-                    self.__wait_atomic_entity_instance_state_change(node_uuid, handler, entity_uuid, instance_uuid, 'pause')
-                return True
-            else:
-                return False
+            return self.api.entity.pause(entity_uuid, node_uuid, instance_uuid, wait)
 
         def resume(self, entity_uuid, node_uuid, instance_uuid, wait=False):
             '''
@@ -709,16 +343,7 @@ class WebAPI(object):
             :return: boolean
             '''
 
-
-            handler = self.__get_entity_handler_by_uuid(node_uuid, entity_uuid)
-            uri = '{}/{}/runtime/{}/entity/{}/instance/{}#status=resume'.format(self.store.droot, node_uuid, handler, entity_uuid, instance_uuid)
-            res = self.store.desired.dput(uri)
-            if res:
-                if wait:
-                    self.__wait_atomic_entity_instance_state_change(node_uuid, handler, entity_uuid, instance_uuid, 'run')
-                return True
-            else:
-                return False
+            return self.api.entity.resume(entity_uuid, node_uuid, instance_uuid, wait)
 
         def migrate(self, entity_uuid, instance_uuid, node_uuid, destination_node_uuid, wait=False):
             '''
@@ -736,45 +361,7 @@ class WebAPI(object):
             :return: boolean
             '''
 
-
-            handler = self.__get_entity_handler_by_uuid(node_uuid, entity_uuid)
-            uri = '{}/{}/runtime/{}/entity/{}/instance/{}'.format(self.store.aroot, node_uuid, handler, entity_uuid, instance_uuid)
-
-            entity_info = self.store.actual.get(uri)
-            if entity_info is None:
-                return False
-
-            entity_info = json.loads(entity_info)
-
-            entity_info_src = entity_info.copy()
-            entity_info_dst = entity_info.copy()
-
-            entity_info_src.update({"status": "taking_off"})
-            entity_info_src.update({"dst": destination_node_uuid})
-
-            entity_info_dst.update({"status": "landing"})
-            entity_info_dst.update({"dst": destination_node_uuid})
-
-            destination_handler = self.__get_entity_handler_by_type(destination_node_uuid, entity_info_dst.get('type'))
-            if destination_handler is None:
-                return False
-
-            uri = '{}/{}/runtime/{}/entity/{}/instance/{}'.format(self.store.droot, destination_node_uuid, destination_handler.get('uuid'), entity_uuid, instance_uuid)
-
-            res = self.store.desired.put(uri, json.dumps(entity_info_dst).replace(' ', ''))
-            if res:
-                uri = '{}/{}/runtime/{}/entity/{}/instance/{}'.format(self.store.droot, node_uuid, handler, entity_uuid, instance_uuid)
-                res_dest = yield from self.store.desired.dput(uri, json.dumps(entity_info_src).replace(' ', ''))
-                if res_dest:
-                    if wait:
-                        self.__wait_atomic_entity_instance_state_change(destination_node_uuid, destination_handler.get('uuid'), entity_uuid, instance_uuid, 'run')
-                    return True
-                else:
-                    print("Error on destination node")
-                    return False
-            else:
-                print("Error on source node")
-                return False
+            return self.api.entity.migrate(entity_uuid, instance_uuid, node_uuid, destination_node_uuid, wait)
 
         def search(self, search_dict, node_uuid=None):
             pass
@@ -786,10 +373,10 @@ class WebAPI(object):
 
 
         '''
-        def __init__(self, store=None):
-            if store is None:
-                raise RuntimeError('store cannot be none in API!')
-            self.store = store
+        def __init__(self, api=None):
+            if api is None:
+                raise RuntimeError('api cannot be none in API!')
+            self.api = api
 
         def add(self, manifest, node_uuid=None):
             '''
@@ -800,17 +387,10 @@ class WebAPI(object):
             :param node_uuid: optional node in which add the image
             :return: boolean
             '''
-            manifest.update({'status': 'add'})
-            json_data = json.dumps(manifest).replace(' ', '')
             if node_uuid is None:
-                uri = '{}/*/runtime/*/image/{}'.format(self.store.droot, manifest.get('uuid'))
-            else:
-                uri = '{}/{}/runtime/*/image/{}'.format(self.store.droot, node_uuid, manifest.get('uuid'))
-            res = self.store.desired.put(uri, json_data)
-            if res:
-                return True
-            else:
-                return False
+                return self.api.image.add(manifest)
+            return self.api.image.add(manifest, node_uuid)
+
 
         def remove(self, image_uuid, node_uuid=None):
             '''
@@ -823,14 +403,8 @@ class WebAPI(object):
             '''
 
             if node_uuid is None:
-                uri = '{}/*/runtime/*/image/{}'.format(self.store.droot, image_uuid)
-            else:
-                uri = '{}/{}/runtime/*/image/{}'.format(self.store.droot, node_uuid, image_uuid)
-            res = self.store.desired.remove(uri)
-            if res:
-                return True
-            else:
-                return False
+                return self.api.image.remove(image_uuid)
+            return self.api.image.remove(image_uuid, node_uuid)
 
         def search(self, search_dict, node_uuid=None):
             pass
@@ -840,10 +414,10 @@ class WebAPI(object):
           This class encapsulates the action on flavors
 
         '''
-        def __init__(self, store=None):
-            if store is None:
-                raise RuntimeError('store cannot be none in API!')
-            self.store = store
+        def __init__(self, api=None):
+            if api is None:
+                raise RuntimeError('api cannot be none in API!')
+            self.api = api
 
         def add(self, manifest, node_uuid=None):
             '''
@@ -854,17 +428,10 @@ class WebAPI(object):
             :param node_uuid: optional node in which add the flavor
             :return: boolean
             '''
-            manifest.update({'status': 'add'})
-            json_data = json.dumps(manifest).replace(' ', '')
+
             if node_uuid is None:
-                uri = '{}/*/runtime/*/flavor/{}'.format(self.store.droot, manifest.get('uuid'))
-            else:
-                uri = '{}/{}/runtime/*/flavor/{}'.format(self.store.droot, node_uuid, manifest.get('uuid'))
-            res = self.store.desired.put(uri, json_data)
-            if res:
-                return True
-            else:
-                return False
+                return self.api.flavor.add(manifest)
+            return self.api.flavor.add(manifest,node_uuid)
 
         def remove(self, flavor_uuid, node_uuid=None):
             '''
@@ -876,14 +443,8 @@ class WebAPI(object):
             :return: boolean
             '''
             if node_uuid is None:
-                uri = '{}/*/runtime/*/flavor/{}'.format(self.store.droot, flavor_uuid)
-            else:
-                uri = '{}/{}/runtime/*/flavor/{}'.format(self.store.droot, node_uuid, flavor_uuid)
-            res = self.store.desired.remove(uri)
-            if res:
-                return True
-            else:
-                return False
+                return self.api.flavor.remove(flavor_uuid)
+            return self.api.flavor.remove(flavor_uuid,node_uuid)
 
         def search(self, search_dict, node_uuid=None):
             pass
@@ -896,70 +457,7 @@ class WebAPI(object):
             :param node_uuid: optional node uuid
             :return: dictionary {node uuid: network element list}
             '''
-
-            if node_uuid is not None:
-                f_list = []
-                uri = '{}/{}/runtime/*/flavor/'.format(self.store.aroot, node_uuid)
-                response = self.store.actual.resolveAll(uri)
-                for i in response:
-                    f_list.append(json.loads(i[1]))
-                return {node_uuid: f_list}
-
-            flavs = {}
-            uri = '{}/*/runtime/*/flavor/'.format(self.store.aroot)
-            response = self.store.actual.resolveAll(uri)
-            for i in response:
-                id = i[0].split('/')[2]
-                net = json.loads(i[1])
-                flavs_list = flavs.get(id, None)
-                if flavs_list is None:
-                    flavs_list = []
-                flavs_list.append(net)
-                flavs.update({id: flavs_list})
-            return flavs
-
-    '''
-    Methods
-    
-    - manifest
-        -check
-    - node
-        - list
-        - info
-        - plugins
-        - search
-    - plugin
-        - add
-        - remove
-        - info
-        - list
-        - search
-    - network
-        - add
-        - remove
-        - list
-        - search
-    - entity
-        - add
-        - remove
-        - define
-        - undefine
-        - configure
-        - clean
-        - run
-        - stop
-        - pause
-        - resume
-        - migrate
-        - search
-    - images
-        - add
-        - remove 
-        - search
-    - flavor
-        - add
-        - remove
-        - search
-
-    
-    '''
+            pass
+            # if node_uuid is not None:
+            #     return self.api.flavor.list(node_uuid)
+            # return self.api.flavor.list()

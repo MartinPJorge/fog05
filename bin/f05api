@@ -5,42 +5,8 @@ import logging
 import json
 import random
 import time
+from fog05 import WebAPI
 
-class FOSStore(object):
-
-    "Helper class to interact with the Store"
-
-    def __init__(self, aroot, droot, home):
-        '''
-
-        Initialize the Store with root and home
-
-        :param aroot: actual store root
-        :param droot: desired store root
-        :param home: store home also used to generate store id
-        '''
-
-        self.aroot = aroot  # 'dfos://{}'
-        self.ahome = str('{}/{}'.format(aroot, home))  # str('dfos://{}/{}' % self.uuid)
-
-        self.droot = droot  # 'dfos://{}'
-        self.dhome = str('{}/{}'.format(droot, home))  # str('dfos://{}/{}' % self.uuid)
-
-
-
-        id = random.randint(int(time.time()-1000),int(time.time()))
-
-        self.actual = Store('a-{}-{}'.format(id, home), self.aroot, self.ahome, 1024)
-        self.desired = Store('d-{}-{}'.format(id, home), self.droot, self.dhome, 1024)
-
-    def close(self):
-        '''
-        Close the store
-
-        :return: None
-        '''
-        self.actual.close()
-        self.desired.close()
 
 
 app = Flask(__name__)
@@ -51,7 +17,7 @@ def index():
     return json.dumps({'fog05 REST API': {'version': 0.1}})
 
 
-@app.route('/get/', methods=['GET'])
+@app.route('/node/list', methods=['GET'])
 def get():
     uri = request.form.get('uri')
     v = None
