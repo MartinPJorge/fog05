@@ -18,9 +18,9 @@ class WebAPI(object):
         Need the distributed store
     '''
 
-    def __init__(self, host, port, sysid=0, store_id="python-api-rest"):
+    def __init__(self, sysid=0, store_id="python-api-rest"):
 
-       self.api = API(store_id='fog05.rest')
+        self.api = API(store_id='fog05.rest')
 
         self.manifest = self.Manifest(self.api)
         self.node = self.Node(self.api)
@@ -29,6 +29,12 @@ class WebAPI(object):
         self.entity = self.Entity(self.api)
         self.image = self.Image(self.api)
         self.flavor = self.Flavor(self.api)
+
+    def add(self, manifest):
+        return self.api.add(manifest)
+
+    def remove(self, entity_uuid):
+        return self.api.remove(entity_uuid)
 
     class Manifest(object):
         '''
@@ -85,7 +91,7 @@ class WebAPI(object):
             :param node_uuid: the uuid of the node you want info
             :return: a list of the plugins installed in the node with detailed informations
             '''
-            self.api.node.plugins(node_uuid)
+            return self.api.node.plugins(node_uuid)
 
         def search(self, search_dict):
             '''
@@ -457,7 +463,6 @@ class WebAPI(object):
             :param node_uuid: optional node uuid
             :return: dictionary {node uuid: network element list}
             '''
-            pass
-            # if node_uuid is not None:
-            #     return self.api.flavor.list(node_uuid)
-            # return self.api.flavor.list()
+            if node_uuid is not None:
+                return self.api.flavor.list(node_uuid)
+            return self.api.flavor.list()
