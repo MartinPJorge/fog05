@@ -1,26 +1,22 @@
-from jsonschema import validate, ValidationError
-from fog05 import Schemas
 from enum import Enum
-import re
 import uuid
 import json
 import fnmatch
 import time
-import urllib3
 import requests
-from fog05 import API
+
 
 
 
 class WebAPI(object):
     '''
-        This class allow the interaction with fog05 using simple Python3 API
-        Need the distributed store
+        This class allow the interaction with fog05 using simple HTTP REST API
+        Connect to a server that expose the API
     '''
 
     def __init__(self, sysid=0, store_id="python-api-rest"):
 
-        self.api = API(store_id='fog05.rest')
+        self.api = 'http://127.0.0.1:5000'
 
         self.manifest = self.Manifest(self.api)
         self.node = self.Node(self.api)
@@ -30,11 +26,18 @@ class WebAPI(object):
         self.image = self.Image(self.api)
         self.flavor = self.Flavor(self.api)
 
+        self.onboard = self.add
+        self.offload = self.remove
+
     def add(self, manifest):
-        return self.api.add(manifest)
+        url = '{}/onboard'.format(self.api)
+        data = requests.post(url, data={'manifest': manifest})
+        return data.json().get('response')
 
     def remove(self, entity_uuid):
-        return self.api.remove(entity_uuid)
+        url = '{}/offload/{}'.format(self.api, entity_uuid)
+        data = requests.delete(url)
+        return data.json().get('response')
 
     class Manifest(object):
         '''
@@ -47,8 +50,7 @@ class WebAPI(object):
             self.api = api
 
         def check(self, manifest, manifest_type):
-           return self.api.manifest.check(manifest, manifest_type)
-
+           pass
         class Type(Enum):
             '''
             Manifest types
@@ -72,7 +74,15 @@ class WebAPI(object):
             self.api = api
 
         def list(self):
-            return self.api.node.list()
+            '''
+                Get all nodes in the current system/tenant
+
+                :return: list of tuples (uuid, hostname)
+            '''
+
+            url = '{}/node/list'.format(self.api)
+            data = requests.get(url)
+            return data.json().get('response')
 
         def info(self, node_uuid):
             """
@@ -81,7 +91,9 @@ class WebAPI(object):
             :param node_uuid: the uuid of the node you want info
             :return: a dictionary with all information about the node
             """
-            return self.api.node.info(node_uuid)
+            url = '{}/node/info/{}'.format(self.api,node_uuid)
+            data = requests.get(url)
+            return data.json().get('response')
 
         def plugins(self, node_uuid):
             '''
@@ -91,7 +103,9 @@ class WebAPI(object):
             :param node_uuid: the uuid of the node you want info
             :return: a list of the plugins installed in the node with detailed informations
             '''
-            return self.api.node.plugins(node_uuid)
+            url = '{}/node/plugins/{}'.format(self.api, node_uuid)
+            data = requests.get(url)
+            return data.json().get('response')
 
         def search(self, search_dict):
             '''
@@ -123,9 +137,11 @@ class WebAPI(object):
             :return: boolean
             '''
             if node_uuid is None:
-                return self.api.plugin.add(manifest)
+                url = '{}/plugin/add'.format(self.api)
             else:
-                return self.api.plugin.add(manifest,node_uuid)
+                url = '{}/plugin/add/'.format(self.api, node_uuid)
+            data = requests.post(url, data={'manifest': manifest})
+            return data.json().get('response')
 
 
         def remove(self, plugin_uuid, node_uuid=None):
@@ -148,9 +164,11 @@ class WebAPI(object):
             :return: dictionary {node_uuid, plugin list }
             '''
             if node_uuid is not None:
-                return self.api.plugin.list(node_uuid)
-            return self.api.plugin.list()
-
+                url = '{}/plugin/list/{}'.format(self.api, node_uuid)
+            else:
+                url = '{}/plugin/list'.format(self.api)
+            data = requests.get(url)
+            return data.json().get('response')
 
 
         def search(self, search_dict, node_uuid=None):
@@ -188,8 +206,11 @@ class WebAPI(object):
             '''
 
             if node_uuid is not None:
-                return self.api.network.add(manifest, node_uuid)
-            return self.api.network.add(manifest)
+                url = '{}/network/add/{}'.format(self.api, node_uuid)
+            else:
+                url = '{}/network/add'.format(self.api)
+            data = requests.post(url, data={'manifest': manifest})
+            return data.json().get('response')
 
 
         def remove(self, net_uuid, node_uuid=None):
@@ -203,8 +224,11 @@ class WebAPI(object):
             '''
 
             if node_uuid is not None:
-               return self.api.network.remove(net_uuid,node_uuid)
-            return self.api.network.remove(net_uuid)
+                url = '{}/network/remove/{}/{}'.format(self.api, net_uuid, node_uuid)
+            else:
+                url = '{}/network/remove/{}'.format(self.api, net_uuid)
+            data = requests.delete(url)
+            return data.json().get('response')
 
 
         def list(self, node_uuid=None):
@@ -217,8 +241,11 @@ class WebAPI(object):
             '''
 
             if node_uuid is not None:
-               return self.api.network.list(node_uuid)
-            return self.api.network.list(node_uuid)
+                url = '{}/network/list/{}'.format(self.api, node_uuid)
+            else:
+                url = '{}/network/list'.format(self.api)
+            data = requests.get(url)
+            return data.json().get('response')
 
         def search(self, search_dict, node_uuid=None):
             '''
@@ -243,48 +270,48 @@ class WebAPI(object):
                 raise RuntimeError('api cannot be none in API!')
             self.api = api
 
-        def define(self, manifest, node_uuid, wait=False):
+        def define(self, manifest, node_uuid):
             '''
 
             Defines an atomic entity in a node, this method will check the manifest before sending the definition to the node
 
             :param manifest: dictionary representing the atomic entity manifest
             :param node_uuid: destination node uuid
-            :param wait: if wait that the definition is complete before returning
             :return: boolean
             '''
-            return self.api.entity.define(manifest,node_uuid, wait)
+            url = '{}/entity/define/{}'.format(self.api, node_uuid)
+            data = requests.post(url, data={'manifest': manifest})
+            return data.json().get('response')
 
 
-        def undefine(self, entity_uuid, node_uuid, wait=False):
+        def undefine(self, entity_uuid, node_uuid):
             '''
 
             This method undefine an atomic entity in a node
 
             :param entity_uuid: atomic entity you want to undefine
             :param node_uuid: destination node
-            :param wait: if wait before returning that the entity is undefined
             :return: boolean
             '''
-            return self.api.entity.undefine(entity_uuid, node_uuid, wait)
+            url = '{}/entity/undefine/{}/{}'.format(self.api, entity_uuid, node_uuid)
+            data = requests.delete(url)
+            return data.json().get('response')
 
-        def configure(self, entity_uuid, node_uuid, instance_uuid=None, wait=False):
+        def configure(self, entity_uuid, node_uuid):
             '''
 
             Configure an atomic entity, creation of the instance
 
             :param entity_uuid: entity you want to configure
             :param node_uuid: destination node
-            :param instance_uuid: optional if preset will use that uuid for the atomic entity instance otherwise will generate a new one
-            :param wait: optional wait before returning
             :return: intstance uuid or none in case of error
             '''
-            if instance_uuid is None:
-                instance_uuid = '{}'.format(uuid.uuid4())
 
-            return self.api.entity.configure(entity_uuid, node_uuid, instance_uuid, wait)
+            url = '{}/entity/configure/{}/{}'.format(self.api, entity_uuid, node_uuid)
+            data = requests.patch(url)
+            return data.json().get('response')
 
-        def clean(self, entity_uuid, node_uuid, instance_uuid, wait=False):
+        def clean(self, entity_uuid, node_uuid, instance_uuid):
             '''
 
             Clean an atomic entity instance, this will destroy the instance
@@ -292,12 +319,13 @@ class WebAPI(object):
             :param entity_uuid: entity for which you want to clean an instance
             :param node_uuid: destionation node
             :param instance_uuid: instance you want to clean
-            :param wait: optional wait before returning
             :return: boolean
             '''
-            return self.api.entity.clean(entity_uuid, node_uuid, instance_uuid, wait)
+            url = '{}/entity/clean/{}/{}/{}'.format(self.api, entity_uuid, instance_uuid, node_uuid)
+            data = requests.patch(url)
+            return data.json().get('response')
 
-        def run(self, entity_uuid, node_uuid, instance_uuid, wait=False):
+        def run(self, entity_uuid, node_uuid, instance_uuid):
             '''
 
             Starting and atomic entity instance
@@ -305,12 +333,13 @@ class WebAPI(object):
             :param entity_uuid: entity for which you want to run the instance
             :param node_uuid: destination node
             :param instance_uuid: instance you want to start
-            :param wait: optional wait before returning
             :return: boolean
             '''
-            return self.api.entity.run(entity_uuid, node_uuid, instance_uuid, wait)
+            url = '{}/entity/run/{}/{}/{}'.format(self.api, entity_uuid, instance_uuid, node_uuid)
+            data = requests.patch(url)
+            return data.json().get('response')
 
-        def stop(self, entity_uuid, node_uuid, instance_uuid, wait=False):
+        def stop(self, entity_uuid, node_uuid, instance_uuid):
             '''
 
             Shutting down an atomic entity instance
@@ -318,13 +347,13 @@ class WebAPI(object):
             :param entity_uuid: entity for which you want to shutdown the instance
             :param node_uuid: destination node
             :param instance_uuid: instance you want to shutdown
-            :param wait: optional wait before returning
             :return: boolean
             '''
+            url = '{}/entity/stop/{}/{}/{}'.format(self.api, entity_uuid, instance_uuid, node_uuid)
+            data = requests.patch(url)
+            return data.json().get('response')
 
-            return self.api.entity.stop(entity_uuid, node_uuid, instance_uuid, wait)
-
-        def pause(self, entity_uuid, node_uuid, instance_uuid, wait=False):
+        def pause(self, entity_uuid, node_uuid, instance_uuid):
             '''
 
             Pause the exectution of an atomic entity instance
@@ -332,12 +361,14 @@ class WebAPI(object):
             :param entity_uuid: entity for which you want to pause the instance
             :param node_uuid: destination node
             :param instance_uuid: instance you want to pause
-            :param wait: optional wait before returning
             :return: boolean
             '''
-            return self.api.entity.pause(entity_uuid, node_uuid, instance_uuid, wait)
 
-        def resume(self, entity_uuid, node_uuid, instance_uuid, wait=False):
+            url = '{}/entity/pause/{}/{}/{}'.format(self.api, entity_uuid, instance_uuid, node_uuid)
+            data = requests.patch(url)
+            return data.json().get('response')
+
+        def resume(self, entity_uuid, node_uuid, instance_uuid):
             '''
 
             resume the exectution of an atomic entity instance
@@ -345,13 +376,14 @@ class WebAPI(object):
             :param entity_uuid: entity for which you want to resume the instance
             :param node_uuid: destination node
             :param instance_uuid: instance you want to resume
-            :param wait: optional wait before returning
             :return: boolean
             '''
 
-            return self.api.entity.resume(entity_uuid, node_uuid, instance_uuid, wait)
+            url = '{}/entity/resume/{}/{}/{}'.format(self.api, entity_uuid, instance_uuid, node_uuid)
+            data = requests.patch(url)
+            return data.json().get('response')
 
-        def migrate(self, entity_uuid, instance_uuid, node_uuid, destination_node_uuid, wait=False):
+        def migrate(self, entity_uuid, instance_uuid, node_uuid, destination_node_uuid):
             '''
 
             Live migrate an atomic entity instance between two nodes
@@ -363,11 +395,12 @@ class WebAPI(object):
             :param instance_uuid: instance you want to migrate
             :param node_uuid: source node for the instance
             :param destination_node_uuid: destination node for the instance
-            :param wait: optional wait before returning
             :return: boolean
             '''
 
-            return self.api.entity.migrate(entity_uuid, instance_uuid, node_uuid, destination_node_uuid, wait)
+            url = '{}/entity/migrate/{}/{}/{}/{}'.format(self.api, entity_uuid, instance_uuid, node_uuid, destination_node_uuid)
+            data = requests.patch(url)
+            return data.json().get('response')
 
         def search(self, search_dict, node_uuid=None):
             pass
@@ -393,9 +426,12 @@ class WebAPI(object):
             :param node_uuid: optional node in which add the image
             :return: boolean
             '''
-            if node_uuid is None:
-                return self.api.image.add(manifest)
-            return self.api.image.add(manifest, node_uuid)
+            if node_uuid is not None:
+                url = '{}/image/add/{}'.format(self.api, node_uuid)
+            else:
+                url = '{}/image/add'.format(self.api)
+            data = requests.post(url, data={'manifest': manifest})
+            return data.json().get('response')
 
 
         def remove(self, image_uuid, node_uuid=None):
@@ -408,9 +444,28 @@ class WebAPI(object):
             :return: boolean
             '''
 
-            if node_uuid is None:
-                return self.api.image.remove(image_uuid)
-            return self.api.image.remove(image_uuid, node_uuid)
+            if node_uuid is not None:
+                url = '{}/image/remove/{}/{}'.format(self.api, image_uuid, node_uuid)
+            else:
+                url = '{}/image/remove/{}'.format(self.api,image_uuid)
+            data = requests.delete(url)
+            return data.json().get('response')
+
+        def list(self, node_uuid=None):
+            '''
+
+            List all images in the system, or in a specific node
+
+            :param node_uuid: optional node uuid
+            :return: dictionary {node uuid: image element list}
+            '''
+
+            if node_uuid is not None:
+                url = '{}/image/list/{}'.format(self.api, node_uuid)
+            else:
+                url = '{}/image/list'.format(self.api)
+            data = requests.get(url)
+            return data.json().get('response')
 
         def search(self, search_dict, node_uuid=None):
             pass
@@ -435,9 +490,12 @@ class WebAPI(object):
             :return: boolean
             '''
 
-            if node_uuid is None:
-                return self.api.flavor.add(manifest)
-            return self.api.flavor.add(manifest,node_uuid)
+            if node_uuid is not None:
+                url = '{}/flavor/add/{}'.format(self.api, node_uuid)
+            else:
+                url = '{}/flavor/add'.format(self.api)
+            data = requests.post(url, data={'manifest': manifest})
+            return data.json().get('response')
 
         def remove(self, flavor_uuid, node_uuid=None):
             '''
@@ -448,9 +506,12 @@ class WebAPI(object):
             :param node_uuid: optional node from which remove the flavor
             :return: boolean
             '''
-            if node_uuid is None:
-                return self.api.flavor.remove(flavor_uuid)
-            return self.api.flavor.remove(flavor_uuid,node_uuid)
+            if node_uuid is not None:
+                url = '{}/flavor/remove/{}/{}'.format(self.api, flavor_uuid, node_uuid)
+            else:
+                url = '{}/flavor/remove/{}'.format(self.api,flavor_uuid)
+            data = requests.delete(url)
+            return data.json().get('response')
 
         def search(self, search_dict, node_uuid=None):
             pass
@@ -461,8 +522,12 @@ class WebAPI(object):
             List all network element available in the system/teneant or in a specified node
 
             :param node_uuid: optional node uuid
-            :return: dictionary {node uuid: network element list}
+            :return: dictionary {node uuid: flavor element list}
             '''
+
             if node_uuid is not None:
-                return self.api.flavor.list(node_uuid)
-            return self.api.flavor.list()
+                url = '{}/flavor/list/{}'.format(self.api, node_uuid)
+            else:
+                url = '{}/flavor/list'.format(self.api)
+            data = requests.get(url)
+            return data.json().get('response')

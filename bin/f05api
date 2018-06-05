@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
-from flask import Flask, Response, request
-from dstore import Store
+from flask import Flask, request
 import logging
 import json
-import random
-import time
-from fog05 import WebAPI
-
+from fog05 import API
+import sys
 
 
 app = Flask(__name__)
@@ -210,19 +207,36 @@ def onboard():
 
 
 @app.route('/offload/<entity_uuid>', methods=['PUT'])
-def onboard(entity_uuid):
+def offload(entity_uuid):
     v = {'response': api.remove(entity_uuid)}
     return json.dumps(v)
 
 
 if __name__ == '__main__':
 
+    port = 5000
+    debug = True
+    if len(sys.argv) > 1:
+        if sys.argv[1] == '--help' or sys.argv[1] == '-h' or sys.argv[1] == 'help':
+            print('\nUSAGE:\n\t{} -p port -d debug\n'.format(sys.argv[0]))
+            exit(0)
+        else:
+            idx = 1
+            len = len(sys.argv)
+            while idx < len:
+                if sys.argv[idx] == '-p':
+                    port = sys.argv[idx + 1]
+                    idx = idx + 2
+                elif sys.argv[idx] == '-d':
+                    debug = 'true' == sys.argv[idx + 1].upper()
+                    idx = idx + 2
+
     sid = 0
-
     home = "f05rest"
+    print('Starting on port {} with debug {}'.format(port, debug))
 
-    api = WebAPI()
+    api = API(sysid=sid, store_id=home)
     try:
-        app.run(host="0.0.0.0", debug=True, port=5000, use_reloader=False)
+        app.run(host="0.0.0.0", debug=True, port=port, use_reloader=False)
     finally:
         print("Bye!")
