@@ -31,7 +31,7 @@ class WebAPI(object):
 
     def add(self, manifest):
         url = '{}/onboard'.format(self.api)
-        data = requests.post(url, data={'manifest': manifest})
+        data = requests.put(url, data={'manifest': manifest})
         return data.json().get('response')
 
     def remove(self, entity_uuid):
@@ -140,7 +140,7 @@ class WebAPI(object):
                 url = '{}/plugin/add'.format(self.api)
             else:
                 url = '{}/plugin/add/'.format(self.api, node_uuid)
-            data = requests.post(url, data={'manifest': manifest})
+            data = requests.put(url, data={'manifest': manifest})
             return data.json().get('response')
 
 
@@ -209,7 +209,7 @@ class WebAPI(object):
                 url = '{}/network/add/{}'.format(self.api, node_uuid)
             else:
                 url = '{}/network/add'.format(self.api)
-            data = requests.post(url, data={'manifest': manifest})
+            data = requests.put(url, data={'manifest': manifest})
             return data.json().get('response')
 
 
@@ -280,7 +280,7 @@ class WebAPI(object):
             :return: boolean
             '''
             url = '{}/entity/define/{}'.format(self.api, node_uuid)
-            data = requests.post(url, data={'manifest': manifest})
+            data = requests.put(url, data={'manifest': manifest})
             return data.json().get('response')
 
 
@@ -430,7 +430,7 @@ class WebAPI(object):
                 url = '{}/image/add/{}'.format(self.api, node_uuid)
             else:
                 url = '{}/image/add'.format(self.api)
-            data = requests.post(url, data={'manifest': manifest})
+            data = requests.put(url, data={'manifest': manifest})
             return data.json().get('response')
 
 
@@ -447,7 +447,7 @@ class WebAPI(object):
             if node_uuid is not None:
                 url = '{}/image/remove/{}/{}'.format(self.api, image_uuid, node_uuid)
             else:
-                url = '{}/image/remove/{}'.format(self.api,image_uuid)
+                url = '{}/image/remove/{}'.format(self.api, image_uuid)
             data = requests.delete(url)
             return data.json().get('response')
 
@@ -494,7 +494,7 @@ class WebAPI(object):
                 url = '{}/flavor/add/{}'.format(self.api, node_uuid)
             else:
                 url = '{}/flavor/add'.format(self.api)
-            data = requests.post(url, data={'manifest': manifest})
+            data = requests.put(url, data={'manifest': manifest})
             return data.json().get('response')
 
         def remove(self, flavor_uuid, node_uuid=None):
@@ -509,7 +509,7 @@ class WebAPI(object):
             if node_uuid is not None:
                 url = '{}/flavor/remove/{}/{}'.format(self.api, flavor_uuid, node_uuid)
             else:
-                url = '{}/flavor/remove/{}'.format(self.api,flavor_uuid)
+                url = '{}/flavor/remove/{}'.format(self.api, flavor_uuid)
             data = requests.delete(url)
             return data.json().get('response')
 

@@ -9,11 +9,13 @@ import sys
 app = Flask(__name__)
 logger = logging.Logger('fog05 rest api')
 
+
 @app.route('/')
 def index():
     return json.dumps({'fog05 REST API': {'version': 0.1}})
 
 # Node
+
 
 @app.route('/node/info/<node_uuid>', methods=['GET'])
 def node_info(node_uuid):
@@ -35,9 +37,10 @@ def node_plugins(node_uuid):
 
 # Plugin
 
+
 @app.route('/plugin/add/<node_uuid>', methods=['PUT'])
 def plugin_add(node_uuid=None):
-    manifest = request.form.get('manifest')
+    manifest = json.loads(request.form.get('manifest'))
     if node_uuid is None:
         v = {'response': api.plugin.add(manifest)}
         return json.dumps(v)
@@ -47,7 +50,6 @@ def plugin_add(node_uuid=None):
 
 @app.route('/plugin/list/<node_uuid>', methods=['GET'])
 def plugin_list(node_uuid=None):
-    manifest = request.form.get('manifest')
     if node_uuid is None:
         v = {'response': api.plugin.list()}
         return json.dumps(v)
@@ -67,7 +69,7 @@ def network_remove(net_uuid, node_uuid=None):
 
 @app.route('/network/add/<node_uuid>', methods=['PUT'])
 def network_add(node_uuid=None):
-    manifest = request.form.get('manifest')
+    manifest = json.loads(request.form.get('manifest'))
     if node_uuid is None:
         v = {'response': api.network.add(manifest)}
         return json.dumps(v)
@@ -149,7 +151,7 @@ def image_remove(img_uuid, node_uuid=None):
 
 @app.route('/image/add/<node_uuid>', methods=['PUT'])
 def image_add(node_uuid=None):
-    manifest = request.form.get('manifest')
+    manifest = json.loads(request.form.get('manifest'))
     if node_uuid is None:
         v = {'response': api.image.add(manifest)}
         return json.dumps(v)
@@ -179,7 +181,7 @@ def flavor_remove(flavor_uuid, node_uuid=None):
 
 @app.route('/flavor/add/<node_uuid>', methods=['PUT'])
 def flavor_add(node_uuid=None):
-    manifest = request.form.get('manifest')
+    manifest = json.loads(request.form.get('manifest'))
     if node_uuid is None:
         v = {'response': api.flavor.add(manifest)}
         return json.dumps(v)
@@ -201,7 +203,7 @@ def flavor_list(node_uuid=None):
 
 @app.route('/onboard', methods=['PUT'])
 def onboard():
-    manifest = request.form.get('manifest')
+    manifest = json.loads(request.form.get('manifest'))
     v = {'response': api.add(manifest)}
     return json.dumps(v)
 

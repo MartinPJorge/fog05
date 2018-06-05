@@ -84,7 +84,7 @@ class API(object):
             print(ve.message)
             exit(-1)
         nws = manifest.get('networks')
-        print('networks: {}'.format(nws))
+        # print('networks: {}'.format(nws))
         for n in nws:
             for node in nodes:
                 res = self.network.add(manifest=n, node_uuid=node[0])
@@ -96,7 +96,7 @@ class API(object):
             search = [x for x in manifest.get("components") if x.get('name') == c]
             if len(search) > 0:
                 component = search[0]
-                print('Onboarding: {}'.format(component))
+                # print('Onboarding: {}'.format(component))
                 mf = component.get('manifest')
                 res = self.entity.define(manifest=mf, node_uuid=component.get('node'), wait=True)
                 # print(res)
