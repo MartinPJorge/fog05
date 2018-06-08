@@ -926,6 +926,7 @@ class KVMLibvirt(RuntimePlugin):
                 return True
 
     def __add_image(self, manifest):
+        # TODO add support for already local image (uri like file://<absolute path>)
         url = manifest.get('base_image')
         image_name = os.path.join(self.BASE_DIR, self.IMAGE_DIR, url.split('/')[-1])
         self.agent.get_os_plugin().download_file(url, image_name)

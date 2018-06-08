@@ -723,7 +723,19 @@ class API(object):
             # print('RES is {}'.format(res))
             if res >= 0:
                 if wait:
-                    self.__wait_atomic_entity_instance_state_change(node_uuid, handler, entity_uuid, instance_uuid, 'run')
+                    state = "run"
+                    while True:
+                        time.sleep(1)
+                        uri = '{}/{}/runtime/{}/entity/{}/instance/{}'.format(self.store.aroot, node_uuid, handler, entity_uuid, instance_uuid)
+                        data = self.store.actual.get(uri)
+                        if data is not None:
+                            entity_info = json.loads(data)
+                            if entity_info is not None:
+                                if entity_info.get('status') == state:
+                                    break
+                                elif entity_info.get('status') != "starting":
+                                    uri = '{}/{}/runtime/{}/entity/{}/instance/{}#status=run'.format(self.store.droot, node_uuid, handler, entity_uuid, instance_uuid)
+                                    self.store.desired.dput(uri)
                 return True
             else:
                 return False

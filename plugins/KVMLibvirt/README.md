@@ -19,11 +19,10 @@ package dependencies:
 
 - libvirt-bin
 - libvirt-dev
-- mkisofs
+- genisofs
 - seabios
 - python3-libvirt
 - qemu-img
-- mkisofs
 - wget
 - libguestfs-tools
 
@@ -44,3 +43,4 @@ config dependencies:
 ubuntu, group = libvirtd)
 - in `/etc/default/libvirt-bin` uncomment libvirtd_opts and modity to libvirtd_opts="-l -d"
 - in `/etc/libvirt/libvirtd.conf` set and uncomment listen_tls = 0 and listen_tcp = 1
+- restart libvirt service (sudo service libvirt-bin restart)

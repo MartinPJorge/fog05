@@ -384,12 +384,17 @@ class LXD(RuntimePlugin):
                 raise StateTransitionNotAllowedException("Instance is not in CONFIGURED state",
                                                          str("Instance %s is not in CONFIGURED state" % instance_uuid))
             else:
+                uri = str('%s/%s/%s' % (self.agent.ahome, self.HOME, entity_uuid))
+                container_info = json.loads(self.agent.astore.get(uri))
+                container_info.update({"status": "starting"})
+                self.__update_actual_store_instance(entity_uuid, instance_uuid, container_info)
+                self.current_entities.update({entity_uuid: entity})
 
                 c = self.conn.containers.get(instance.name)
                 c.start()
 
                 instance.on_start()
-                uri = str('%s/%s/%s' % (self.agent.ahome, self.HOME, entity_uuid))
+
                 container_info = json.loads(self.agent.astore.get(uri))
                 container_info.update({"status": "run"})
                 self.__update_actual_store_instance(entity_uuid, instance_uuid, container_info)
