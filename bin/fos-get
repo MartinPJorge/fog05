@@ -74,7 +74,7 @@ class FOSGetCli(object):
         if uri.startswith('a'):
             v = self.store.actual.resolveAll(uri)
         elif uri.startswith('d'):
-            v = self.store.desidered.resolveAll(uri)
+            v = self.store.desired.resolveAll(uri)
 
         if v is not None or len(v) == 0:
             pprint.pprint(v)
