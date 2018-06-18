@@ -928,8 +928,15 @@ class KVMLibvirt(RuntimePlugin):
     def __add_image(self, manifest):
         # TODO add support for already local image (uri like file://<absolute path>)
         url = manifest.get('base_image')
-        image_name = os.path.join(self.BASE_DIR, self.IMAGE_DIR, url.split('/')[-1])
-        self.agent.get_os_plugin().download_file(url, image_name)
+        if url.startswith('http'):
+            image_name = os.path.join(self.BASE_DIR, self.IMAGE_DIR, url.split('/')[-1])
+            self.agent.get_os_plugin().download_file(url, image_name)
+
+        elif url.image_url.startswith('file://'):
+            image_name = os.path.join(self.BASE_DIR, self.IMAGE_DIR, url.image_url.split('/')[-1])
+            cmd = 'cp {} {}'.format(url[len('file://'):], image_name)
+            self.agent.get_os_plugin().execute_command(cmd, True)
+
         manifest.update({'path': image_name})
         uri = '{}/{}'.format(self.HOME_IMAGE, manifest.get('uuid'))
         self.__update_actual_store(uri, manifest)
