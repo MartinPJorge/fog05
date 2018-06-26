@@ -21,6 +21,7 @@ type constraints_type = {
   ?position : position_constraint_type option;
   ?cpu_constraint : cpu_constraint_type option;
   ?running_time_constraint : running_time_constraints_type option;
+  ?migration: migration_constraint_type option;
 }
 
 type constraint_type = {
@@ -32,6 +33,11 @@ type position_constraint_type = {
   lat : string;
   lon : string;
   radius : int;
+}
+
+type migration_constraint_type = {
+  kill_before: bool; (* true=can kill VNF before it has been copied *)
+  script: string; (* Migration script to execute *)
 }
 
 type cpu_constraint_type = {
@@ -55,6 +61,16 @@ type entity = {
   ?status : string option;
   ?description : string option;
   ?networks : network list option;
+  dependencies: dependency_type list;
+}
+
+type dependency_type = {
+  name : string;
+  category : string;
+  version : string;
+  transport_dependency : transport_descriptor; (* Point to mec_app_definition transport_descriptor? *)
+  requested_permissions: string list;
+>>>>>>>>>> TODO: REFERENCE HERE app, entity, service, what? <<<<<<<<<<<
 }
 
 type component_type = {
@@ -63,9 +79,16 @@ type component_type = {
   ?node : string option;
   need : string list;
   ?proximity : string option;
-
+  dns: dns_type option;
 }
 
+type dns_type = {
+  id : string;
+  domainName : string;
+  ipAddressType : string; (* IPv4 or IPv6 *)
+  ipAddress : string;
+  TTL : int;
+}
 
 
 (* Plugin manifest *)

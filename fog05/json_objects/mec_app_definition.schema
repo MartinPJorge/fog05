@@ -1,0 +1,84 @@
+{
+  "$schema": "http://json-schema.org/draft-06/schema#",
+  "title": "Generic Definition",
+  "description": "MEC application definition schema",
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "string",
+      "desciption": "describe the action, so the desidered lifecycle state"
+    },
+    "name": {
+      "type": "string"
+    },
+    "export": {
+      "type": "bool"
+    }
+    "uuid": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "service_description": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "transports-supported": {
+            "type": "transport_description"
+          },
+          "serializers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "version": {
+            "type": "string"
+          }
+        }
+    }
+    "transport_description": {
+        "type": "object",
+        "properties": {
+          "protocol": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "security": {
+            "type": "string"
+          }
+        }
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "need": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "proximity": {
+            "type": "object"
+          },
+          "manifest": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
