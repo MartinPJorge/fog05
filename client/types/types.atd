@@ -55,7 +55,8 @@ type running_time_constraints_type = {
 type entity = {
   uuid : string;
   name : string;
-  version : int;
+  export: bool; (* If entity service is exported to EFS service platform *)
+  ?export_info : service_info_type option;
   entity_type <json name="type"> : string;
   components : component_type list;
   ?status : string option;
@@ -65,12 +66,36 @@ type entity = {
 }
 
 type dependency_type = {
-  name : string;
+  target_uuid : string; (* uuid of the entity or mec_application *)
+  target_info : service_info_type;
+  requested_permissions : permission_type list;
+}
+
+type service_info_type = {
+  service_name : string;
   category : string;
   version : string;
-  transport_dependency : transport_descriptor; (* Point to mec_app_definition transport_descriptor? *)
-  requested_permissions: string list;
->>>>>>>>>> TODO: REFERENCE HERE app, entity, service, what? <<<<<<<<<<<
+  transport : transport_descriptor_type; 
+  api_calls : api_type list;
+}
+
+type transport_description_type = {
+  protocol : string;
+  version : string;
+  security : string;
+  endpoint : string;
+  serializers : string list; (* "JSON", "XML", "protobuf3" *)
+}
+
+type permission_type = {
+  api_uuid : string; (* references an api_type *)
+  requested_operations : string list;
+}
+
+type api_type = {
+  uuid : string;
+  URI : string; (* /temperature/ *)
+  supported_operations : string list; (* [GET, POST, ...] *)
 }
 
 type component_type = {

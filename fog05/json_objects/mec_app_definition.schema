@@ -20,43 +20,9 @@
     "description": {
       "type": "string"
     },
-    "service_description": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "category": {
-            "type": "string"
-          },
-          "transports-supported": {
-            "type": "transport_description"
-          },
-          "serializers": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "version": {
-            "type": "string"
-          }
-        }
+    "service_info_type": {
+        <<<< HOW I express this as a service_info_type reference >>>>
     }
-    "transport_description": {
-        "type": "object",
-        "properties": {
-          "protocol": {
-            "type": "string"
-          },
-          "version": {
-            "type": "string"
-          },
-          "security": {
-            "type": "string"
-          }
-        }
-    },
     "components": {
       "type": "array",
       "items": {
